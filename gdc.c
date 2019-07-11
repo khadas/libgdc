@@ -419,7 +419,7 @@ int gdc_sync_for_device(struct gdc_usr_ctx_s *ctx)
 	}
 	if (!ctx->custom_fw &&
 		gs_ex->config_buffer.mem_alloc_type == AML_GDC_MEM_DMABUF) {
-		shared_fd[0] = gs_ex->input_buffer.shared_fd;
+		shared_fd[0] = gs_ex->config_buffer.shared_fd;
 		ret = ioctl(ctx->gdc_client, GDC_SYNC_DEVICE,
 				&shared_fd[0]);
 		if (ret < 0) {

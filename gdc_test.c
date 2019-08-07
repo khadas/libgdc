@@ -27,7 +27,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
-
+#include <sys/time.h>
 #include "gdc_api.h"
 
 struct gdc_param {
@@ -498,6 +498,15 @@ static int parse_custom_fw(struct gdc_usr_ctx_s *ctx, char *config_file)
 	return 0;
 }
 
+static inline unsigned long myclock()
+{
+	struct timeval tv;
+
+	gettimeofday (&tv, NULL);
+
+	return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
+}
+
 int main(int argc, char* argv[]) {
 	int c;
 	int ret = 0;
@@ -517,6 +526,7 @@ int main(int argc, char* argv[]) {
 	struct gdc_param g_param;
 	int len = 0;
 	int is_custom_fw;
+	unsigned long stime;
 
 	while (1) {
 		static struct option opts[] = {
@@ -588,29 +598,32 @@ int main(int argc, char* argv[]) {
 		E_GDC("Error plane_number=[%d]\n", plane_number);
 		return -1;
 	}
+
+	g_param.i_width = in_width;
+	g_param.i_height = in_height;
+	g_param.o_width = out_width;
+	g_param.o_height = out_height;
+	g_param.format = format;
+
+	memset(&ctx, 0, sizeof(ctx));
+	ctx.custom_fw = is_custom_fw;
+	ctx.mem_type = mem_type;
+	ctx.plane_number = plane_number;
+
+	ret = gdc_init_cfg(&ctx, &g_param, config_file);
+	if (ret < 0) {
+		E_GDC("Error gdc init\n");
+		gdc_destroy_ctx(&ctx);
+		return -1;
+	}
+
+	len = get_file_size(input_file);
+
+	gdc_set_input_image(&ctx, input_file, len);
+
+	stime = myclock();
+
 	for (i=0; i < num; i++) {
-		g_param.i_width = in_width;
-		g_param.i_height = in_height;
-		g_param.o_width = out_width;
-		g_param.o_height = out_height;
-		g_param.format = format;
-
-		memset(&ctx, 0, sizeof(ctx));
-		ctx.custom_fw = is_custom_fw;
-		ctx.mem_type = mem_type;
-		ctx.plane_number = plane_number;
-
-		ret = gdc_init_cfg(&ctx, &g_param, config_file);
-		if (ret < 0) {
-			E_GDC("Error gdc init\n");
-			gdc_destroy_ctx(&ctx);
-			return -1;
-		}
-
-		len = get_file_size(input_file);
-
-		gdc_set_input_image(&ctx, input_file, len);
-
 		if (!ctx.custom_fw) {
 			ret = gdc_process(&ctx);
 			if (ret < 0) {
@@ -635,10 +648,11 @@ int main(int argc, char* argv[]) {
 				return ret;
 			}
 		}
-		save_imgae(&ctx, output_file);
-		gdc_destroy_ctx(&ctx);
-		D_GDC("Success save output image, loop=%d\n", i);
 	}
+	printf("time=%ld ms\n", myclock() - stime);
+
+	save_imgae(&ctx, output_file);
+	gdc_destroy_ctx(&ctx);
 
 	return 0;
 }

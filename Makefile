@@ -25,10 +25,10 @@ $(LIBGDC): $(LIBGDC_OBJ)
 	$(CC) -shared -fPIC -lion $(CFLAGS) $^ -o $(LIBGDC)
 
 $(GDC_TEST): $(GDC_TEST_OBJ)
-	$(CC) $^ -L$(LIBDIR) -lgdc $(CFLAGS) -o $@
+	$(CC) $^ -L$(LIBDIR) -lgdc -lpthread $(CFLAGS) -o $@
 
 $(GDC_CHIP_CHECK): $(GDC_CHIP_CHECK_OBJ)
-	$(CC) $^ -L$(LIBDIR) -lgdc -lion $(CFLAGS) -o $@
+	$(CC) $^ -L$(LIBDIR) -lgdc -lion -lpthread $(CFLAGS) -o $@
 
 .PHONY: clean
 clean:

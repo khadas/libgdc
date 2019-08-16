@@ -45,9 +45,13 @@ int gdc_create_ctx(struct gdc_usr_ctx_s *ctx)
 			errno, strerror(errno));
 		return -1;
 	}
-	ret = CMEM_init();
-	if (ret < 0)
+	ret = ion_mem_init();
+	if (ret < 0) {
+		E_GDC("ionmem init failed\n");
 		return -1;
+	}
+
+	ctx->ion_fd = ret;
 
 	return 0;
 }
@@ -122,7 +126,11 @@ int gdc_destroy_ctx(struct gdc_usr_ctx_s *ctx)
 		close(ctx->gdc_client);
 		ctx->gdc_client = -1;
 	}
-	CMEM_exit();
+
+	if (ctx->ion_fd >= 0) {
+		ion_mem_exit(ctx->ion_fd);
+		ctx->ion_fd = -1;
+	}
 
 	return 0;
 }
@@ -269,7 +277,7 @@ int gdc_alloc_buffer (struct gdc_usr_ctx_s *ctx, uint32_t type,
 			int ret = -1;
 			IONMEM_AllocParams ion_alloc_params;
 
-			ret = CMEM_alloc(buf->len[i], &ion_alloc_params,
+			ret = ion_mem_alloc(ctx->ion_fd, buf->len[i], &ion_alloc_params,
 						cache_flag);
 			if (ret < 0) {
 				E_GDC("%s,%d,Not enough memory\n",__func__,
@@ -454,6 +462,20 @@ int gdc_sync_for_cpu(struct gdc_usr_ctx_s *ctx)
 				return ret;
 			}
 		}
+	} else {
+		plane_number = gs_ex->output_buffer.plane_number;
+		for (i = 0; i < plane_number; i++) {
+			if (i == 0)
+				ion_mem_invalid_cache(ctx->ion_fd,
+						gs_ex->output_buffer.shared_fd);
+			else if (i == 1)
+				ion_mem_invalid_cache(ctx->ion_fd,
+						gs_ex->output_buffer.uv_base_fd);
+			else if (i == 2)
+				ion_mem_invalid_cache(ctx->ion_fd,
+						gs_ex->output_buffer.v_base_fd);
+		}
 	}
+
 	return 0;
 }

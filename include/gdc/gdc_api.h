@@ -279,6 +279,7 @@ struct gdc_settings_with_fw {
 
 struct gdc_usr_ctx_s {
 	int gdc_client;
+	int ion_fd;
 	int custom_fw;
 	struct gdc_settings gs;
 	struct gdc_settings_ex gs_ex;

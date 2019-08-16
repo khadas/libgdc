@@ -28,6 +28,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <pthread.h>
+
 #include "gdc_api.h"
 
 struct gdc_param {
@@ -92,7 +94,7 @@ static int gdc_set_config_param(struct gdc_usr_ctx_s *ctx,
 }
 
 static int gdc_set_input_image(struct gdc_usr_ctx_s *ctx,
-			       char *f_name, int len)
+					char *f_name, int len)
 {
 	FILE *fp = NULL;
 	int r_size = -1;
@@ -507,47 +509,155 @@ static inline unsigned long myclock()
 	return (tv.tv_sec * 1000 + tv.tv_usec / 1000);
 }
 
-int main(int argc, char* argv[]) {
-	int c;
-	int ret = 0;
+static uint32_t format;
+static uint32_t in_width = 1920;
+static uint32_t in_height = 1920;
+static uint32_t out_width = 1920;
+static uint32_t out_height = 1920;
+static uint32_t in_y_stride = 0, in_c_stride = 0;
+static uint32_t out_y_stride = 0, out_c_stride = 0;
+static int num = 1, plane_number = 1, mem_type = 1;
+static char *input_file = "input_file";
+static char *output_file = "output_file";
+static char *config_file = "config.bin";
+static int is_custom_fw;
+static int num_thread = 1;
+static int num_process_per_thread = 1;
+
+#define THREADS_MAX_NUM (64)
+
+void *main_run(void *arg)
+{
+	int ret = 0, i = 0, j = 0, len = 0;
 	struct gdc_usr_ctx_s ctx;
-	uint32_t format;
-	uint32_t in_width = 1920;
-	uint32_t in_height = 1920;
-	uint32_t out_width = 1920;
-	uint32_t out_height = 1920;
-	uint32_t in_y_stride = 0, in_c_stride = 0;
-	uint32_t out_y_stride = 0, out_c_stride = 0;
-	int num = 1, plane_number = 1, mem_type = 1;
-	int i=0;
-	char *input_file = "input_file";
-	char *output_file = "output_file";
-	char *config_file = "config.bin";
 	struct gdc_param g_param;
-	int len = 0;
-	int is_custom_fw;
 	unsigned long stime;
 
+	ret = check_plane_number(plane_number, format);
+	if (ret < 0) {
+		E_GDC("Error plane_number=[%d]\n", plane_number);
+		return NULL;
+	}
+
+	g_param.i_width = in_width;
+	g_param.i_height = in_height;
+	g_param.o_width = out_width;
+	g_param.o_height = out_height;
+	g_param.format = format;
+
+	for (i = 0; i < num_process_per_thread; i++) {
+		printf("ThreadIdx -- %d, run time -- %d\n", *(int *)arg, i);
+		memset(&ctx, 0, sizeof(ctx));
+		ctx.custom_fw = is_custom_fw;
+		ctx.mem_type = mem_type;
+		ctx.plane_number = plane_number;
+
+		ret = gdc_init_cfg(&ctx, &g_param, config_file);
+		if (ret < 0) {
+			E_GDC("Error gdc init\n");
+			gdc_destroy_ctx(&ctx);
+			return NULL;
+		}
+
+		len = get_file_size(input_file);
+
+		gdc_set_input_image(&ctx, input_file, len);
+
+		stime = myclock();
+
+		for (j = 0; j < num; j++) {
+			if (!ctx.custom_fw) {
+				ret = gdc_process(&ctx);
+				if (ret < 0) {
+					E_GDC("ioctl failed\n");
+					gdc_destroy_ctx(&ctx);
+					return NULL;
+				}
+			} else {
+				struct gdc_settings_with_fw *gdc_gw = &ctx.gs_with_fw;
+				struct gdc_settings_ex *gdc_gs = &ctx.gs_ex;
+				memcpy(&gdc_gw->input_buffer, &gdc_gs->input_buffer,
+					sizeof(gdc_buffer_info_t));
+				memcpy(&gdc_gw->output_buffer, &gdc_gs->output_buffer,
+					sizeof(gdc_buffer_info_t));
+				memcpy(&gdc_gw->gdc_config, &gdc_gs->gdc_config,
+					sizeof(gdc_config_t));
+				parse_custom_fw(&ctx, config_file);
+				ret = gdc_process_with_builtin_fw(&ctx);
+				if (ret < 0) {
+					E_GDC("ioctl failed\n");
+					gdc_destroy_ctx(&ctx);
+					return NULL;
+				}
+			}
+		}
+		printf("time=%ld ms\n", myclock() - stime);
+
+		save_imgae(&ctx, output_file);
+		gdc_destroy_ctx(&ctx);
+	}
+	return NULL;
+}
+
+static void print_usage(void)
+{
+	int i;
+	printf ("Usage: gdc_test [options]\n\n");
+	printf ("Options:\n\n");
+	printf ("  -h                      Print usage information.\n");
+	printf ("  -c <string>             config file name.\n");
+	printf ("  -t <num>                use custom_fw or not.\n");
+	printf ("  -f <num>                format. 1:NV12,2:YV12,3:Y_GREY,4:YUV444_P,5:RGB444_P,\n");
+	printf ("  -i <string>             input file name.\n");
+	printf ("  -o <string>             output file name.\n");
+	printf ("  -p <num>                image plane num.\n");
+	printf ("  -w <width x height>     image width x height.\n");
+	printf ("  -n <num>                num of process time.\n");
+	printf ("  -m <num>                memtype. 0:ION,1:DMABUF.\n");
+	printf ("  -l <num>                num of threads.\n");
+	printf ("  -r <num>                run time for every thread.\n");
+	printf ("\n");
+}
+
+int main(int argc, char **argv)
+{
+	int ret = -1, i, c;
+
+	pthread_t thread[THREADS_MAX_NUM];
+	int threadindex[THREADS_MAX_NUM];
+
+	if (num_thread > THREADS_MAX_NUM) {
+		E_GDC("num of thread greater than THREADS_MAX_NUM\n");
+		return -1;
+	}
+	memset(&thread, 0, sizeof(thread));
+
+	/* parse command line */
 	while (1) {
 		static struct option opts[] = {
+			{"help", no_argument, 0, 'h'},
 			{"config_file", required_argument, 0, 'c'},
 			{"custom_fw", required_argument, 0, 't'},
 			{"format", required_argument, 0, 'f'},
-			{"height", required_argument, 0, 'h'},
 			{"input_file", required_argument, 0, 'i'},
 			{"output_file", required_argument, 0, 'o'},
 			{"plane_num", required_argument, 0, 'p'},
 			{"stride", required_argument, 0, 's'},
-			{"width", required_argument, 0, 'w'},
+			{"width x height", required_argument, 0, 'w'},
 			{"num_of_iter", required_argument, 0, 'n'},
-			{"memory_type", required_argument, 0, 'm'}
+			{"memory_type", required_argument, 0, 'm'},
+			{"num of threads", required_argument, 0, 'l'},
+			{"run circles in thread", required_argument, 0, 'r'}
 		};
 		int i = 0;
-		c = getopt_long(argc, argv, "c:t:f:h:i:o:p:s:w:n:m:", opts, &i);
+		c = getopt_long(argc, argv, "hc:t:f:h:i:o:p:s:w:n:m:l:r:", opts, &i);
 		if (c == -1)
 			break;
 
 		switch (c) {
+		case 'h':
+			print_usage();
+			return 0;
 		case 'c':
 			is_custom_fw = 0;
 			config_file = optarg;
@@ -590,69 +700,26 @@ int main(int argc, char* argv[]) {
 		case 'm':
 			mem_type = atol(optarg);
 			break;
+		case 'l':
+			num_thread = atol(optarg);
+			break;
+		case 'r':
+			num_process_per_thread = atol(optarg);
+			break;
 		}
 	}
 
-	ret = check_plane_number(plane_number, format);
-	if (ret < 0) {
-		E_GDC("Error plane_number=[%d]\n", plane_number);
-		return -1;
-	}
-
-	g_param.i_width = in_width;
-	g_param.i_height = in_height;
-	g_param.o_width = out_width;
-	g_param.o_height = out_height;
-	g_param.format = format;
-
-	memset(&ctx, 0, sizeof(ctx));
-	ctx.custom_fw = is_custom_fw;
-	ctx.mem_type = mem_type;
-	ctx.plane_number = plane_number;
-
-	ret = gdc_init_cfg(&ctx, &g_param, config_file);
-	if (ret < 0) {
-		E_GDC("Error gdc init\n");
-		gdc_destroy_ctx(&ctx);
-		return -1;
-	}
-
-	len = get_file_size(input_file);
-
-	gdc_set_input_image(&ctx, input_file, len);
-
-	stime = myclock();
-
-	for (i=0; i < num; i++) {
-		if (!ctx.custom_fw) {
-			ret = gdc_process(&ctx);
-			if (ret < 0) {
-				E_GDC("ioctl failed\n");
-				gdc_destroy_ctx(&ctx);
-				return ret;
-			}
-		} else {
-			struct gdc_settings_with_fw *gdc_gw = &ctx.gs_with_fw;
-			struct gdc_settings_ex *gdc_gs = &ctx.gs_ex;
-			memcpy(&gdc_gw->input_buffer, &gdc_gs->input_buffer,
-				sizeof(gdc_buffer_info_t));
-			memcpy(&gdc_gw->output_buffer, &gdc_gs->output_buffer,
-				sizeof(gdc_buffer_info_t));
-			memcpy(&gdc_gw->gdc_config, &gdc_gs->gdc_config,
-				sizeof(gdc_config_t));
-			parse_custom_fw(&ctx, config_file);
-			ret = gdc_process_with_builtin_fw(&ctx);
-			if (ret < 0) {
-				E_GDC("ioctl failed\n");
-				gdc_destroy_ctx(&ctx);
-				return ret;
-			}
+	for (int i = 0; i < num_thread; i++) {
+		threadindex[i] = i;
+		int res = pthread_create(&(thread[i]), NULL, main_run, (void *)&threadindex[i]);
+		if (res != 0) {
+			E_GDC("integral thread %d creation failed!", i);
+			return -1;
 		}
 	}
-	printf("time=%ld ms\n", myclock() - stime);
-
-	save_imgae(&ctx, output_file);
-	gdc_destroy_ctx(&ctx);
+	for (int i = 0; i < num_thread; i++)
+		pthread_join(thread[i], NULL);
 
 	return 0;
 }
+

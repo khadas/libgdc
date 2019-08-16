@@ -381,7 +381,8 @@ int main(int argc, char* argv[]) {
 			return ret;
 		}
 
-		CMEM_invalid_cache(ctx.gs_ex.output_buffer.shared_fd);
+		ion_mem_invalid_cache(ctx.ion_fd,
+			ctx.gs_ex.output_buffer.shared_fd);
 		ret = compare_data(output_cmp, ctx.o_buff[i],
 				ctx.o_len[i]);
 		if (ret < 0)

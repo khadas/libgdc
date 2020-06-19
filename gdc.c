@@ -363,19 +363,11 @@ int gdc_process(struct gdc_usr_ctx_s *ctx)
 	int ret = -1;
 	struct gdc_settings_ex *gs_ex = &ctx->gs_ex;
 
-	ret = gdc_sync_for_device(ctx);
-	if (ret < 0)
-		return ret;
-
 	ret = ioctl(ctx->gdc_client, GDC_PROCESS_EX, gs_ex);
 	if (ret < 0) {
 		E_GDC("GDC_RUN ioctl failed\n");
 		return ret;
 	}
-
-	ret = gdc_sync_for_cpu(ctx);
-	if (ret < 0)
-		return ret;
 
 	return 0;
 }
@@ -385,18 +377,11 @@ int gdc_process_with_builtin_fw(struct gdc_usr_ctx_s *ctx)
 	int ret = -1;
 	struct gdc_settings_with_fw *gs_with_fw = &ctx->gs_with_fw;
 
-	ret = gdc_sync_for_device(ctx);
-	if (ret < 0)
-		return ret;
-
 	ret = ioctl(ctx->gdc_client, GDC_PROCESS_WITH_FW, gs_with_fw);
 	if (ret < 0) {
 		E_GDC("GDC_PROCESS_WITH_FW ioctl failed\n");
 		return ret;
 	}
-	ret = gdc_sync_for_cpu(ctx);
-	if (ret < 0)
-		return ret;
 
 	return 0;
 }

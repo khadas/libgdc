@@ -32,13 +32,16 @@
 
 #include "gdc_api.h"
 
-#define   FILE_NAME_GDC "/dev/gdc"
+#define   FILE_NAME_GDC      "/dev/gdc"
+#define   FILE_NAME_AML_GDC  "/dev/amlgdc"
 
 int gdc_create_ctx(struct gdc_usr_ctx_s *ctx)
 {
 	int ret = -1;
+	char *dev_name = (ctx->dev_type == ARM_GDC) ? FILE_NAME_GDC :
+						      FILE_NAME_AML_GDC;
 
-	ctx->gdc_client = open(FILE_NAME_GDC, O_RDWR | O_SYNC);
+	ctx->gdc_client = open(dev_name, O_RDWR | O_SYNC);
 
 	if (ctx->gdc_client < 0) {
 		E_GDC("gdc open failed error=%d, %s",

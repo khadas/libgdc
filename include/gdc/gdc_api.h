@@ -58,6 +58,11 @@ enum {
 	FMT_MAX
 };
 
+enum {
+	ARM_GDC,
+	AML_GDC
+};
+
 typedef unsigned int uint32_t;
 
 // each configuration addresses and size
@@ -292,6 +297,7 @@ struct gdc_usr_ctx_s {
 	unsigned long i_len[MAX_PLANE];
 	unsigned long o_len[MAX_PLANE];
 	unsigned long c_len;
+	unsigned int dev_type;
 };
 
 typedef struct gdc_alloc_buffer_s {

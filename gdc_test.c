@@ -523,6 +523,7 @@ static char *config_file = "config.bin";
 static int is_custom_fw;
 static int num_thread = 1;
 static int num_process_per_thread = 1;
+static int dev_type = 0;
 
 #define THREADS_MAX_NUM (64)
 
@@ -551,6 +552,7 @@ void *main_run(void *arg)
 		ctx.custom_fw = is_custom_fw;
 		ctx.mem_type = mem_type;
 		ctx.plane_number = plane_number;
+		ctx.dev_type = dev_type;
 
 		ret = gdc_init_cfg(&ctx, &g_param, config_file);
 		if (ret < 0) {
@@ -616,6 +618,7 @@ static void print_usage(void)
 	printf ("  -m <num>                memtype. 0:ION,1:DMABUF.\n");
 	printf ("  -l <num>                num of threads.\n");
 	printf ("  -r <num>                run time for every thread.\n");
+	printf ("  -d <num>                dev_type, 0:ARM_GDC 1:AML_GDC.\n");
 	printf ("\n");
 }
 
@@ -647,10 +650,11 @@ int main(int argc, char **argv)
 			{"num_of_iter", required_argument, 0, 'n'},
 			{"memory_type", required_argument, 0, 'm'},
 			{"num of threads", required_argument, 0, 'l'},
-			{"run circles in thread", required_argument, 0, 'r'}
+			{"run circles in thread", required_argument, 0, 'r'},
+			{"dev type", required_argument, 0, 'd'}
 		};
 		int i = 0;
-		c = getopt_long(argc, argv, "hc:t:f:h:i:o:p:s:w:n:m:l:r:", opts, &i);
+		c = getopt_long(argc, argv, "hc:t:f:h:i:o:p:s:w:n:m:l:r:d:", opts, &i);
 		if (c == -1)
 			break;
 
@@ -705,6 +709,9 @@ int main(int argc, char **argv)
 			break;
 		case 'r':
 			num_process_per_thread = atol(optarg);
+			break;
+		case 'd':
+			dev_type = atol(optarg);
 			break;
 		}
 	}

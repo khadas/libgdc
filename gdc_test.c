@@ -195,16 +195,19 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 
 	format = tparm->format;
 
-	i_y_stride = AXI_WORD_ALIGN(i_width);
-	o_y_stride = AXI_WORD_ALIGN(o_width);
-
 	if (format == NV12 || format == YUV444_P || format == RGB444_P) {
+		i_y_stride = AXI_WORD_ALIGN(i_width);
+		o_y_stride = AXI_WORD_ALIGN(o_width);
 		i_c_stride = AXI_WORD_ALIGN(i_width);
 		o_c_stride = AXI_WORD_ALIGN(o_width);
 	} else if (format == YV12) {
-		i_c_stride = AXI_WORD_ALIGN(i_width) / 2;
-		o_c_stride = AXI_WORD_ALIGN(o_width) / 2;
+		i_c_stride = AXI_WORD_ALIGN(i_width / 2);
+		o_c_stride = AXI_WORD_ALIGN(o_width / 2);
+		i_y_stride = i_c_stride * 2;
+		o_y_stride = o_c_stride * 2;
 	} else if (format == Y_GREY) {
+		i_y_stride = AXI_WORD_ALIGN(i_width);
+		o_y_stride = AXI_WORD_ALIGN(o_width);
 		i_c_stride = 0;
 		o_c_stride = 0;
 	} else {

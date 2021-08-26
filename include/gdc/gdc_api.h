@@ -22,6 +22,10 @@
 #define WORD_MASK (~(WORD_SIZE - 1))
 #define AXI_WORD_ALIGN(size) ((size + WORD_SIZE - 1) & WORD_MASK)
 
+#define BYTE_SIZE 8
+#define BYTE_MASK (~(BYTE_SIZE - 1))
+#define AXI_BYTE_ALIGN(size) ((size + BYTE_SIZE - 1) & BYTE_MASK)
+
 typedef unsigned long phys_addr_t;
 
 #define __iomem
@@ -49,6 +53,12 @@ enum dma_data_direction {
 	DMA_NONE = 3,
 };
 
+/* format type and format bit width mask
+ * example: (NV12 | BIT_16) means nv12 16bit.
+ */
+#define FORMAT_TYPE_MASK  0xffff
+#define FORMAT_BITW_MASK  0xffff0000
+
 enum {
 	NV12 = 1,
 	YV12,
@@ -56,6 +66,13 @@ enum {
 	YUV444_P,
 	RGB444_P,
 	FMT_MAX
+};
+
+enum {
+	BITW_8  = 0, /* default bit width */
+	BITW_10 = (1 << 16),
+	BITW_12 = (1 << 17),
+	BITW_16 = (1 << 18),
 };
 
 enum {

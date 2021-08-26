@@ -191,7 +191,7 @@ static int set_buf_fd(gdc_alloc_buffer_t *buf, gdc_buffer_info_t *buf_info,
 
 	D_GDC("buf_fd=%d, plane_id=%d, buf->format=%d\n", buf_fd,
 				plane_id, buf->format);
-	switch (buf->format) {
+	switch (buf->format & FORMAT_TYPE_MASK) {
 	case NV12:
 		if (buf->plane_number == 1) {
 			buf_info->shared_fd = buf_fd;

@@ -168,6 +168,8 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 	struct gdc_settings_ex *gdc_gs = NULL;
 	int ret = -1;
 	uint32_t format = 0;
+	uint32_t bit_width_flag = 0;
+	uint32_t bit_width = 8;
 	uint32_t i_width = 0;
 	uint32_t i_height = 0;
 	uint32_t o_width = 0;
@@ -193,25 +195,42 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 	o_width = tparm->o_width;
 	o_height = tparm->o_height;
 
-	format = tparm->format;
+	format = tparm->format & FORMAT_TYPE_MASK;
+	bit_width_flag = tparm->format & FORMAT_BITW_MASK;
+
+	switch (bit_width_flag) {
+	case BITW_8:
+		bit_width = 8;
+		break;
+	case BITW_10:
+		bit_width = 10;
+		break;
+	case BITW_12:
+		bit_width = 12;
+		break;
+	case BITW_16:
+		bit_width = 16;
+		break;
+	}
+	printf("bit width:%d\n", bit_width);
 
 	if (format == NV12 || format == YUV444_P || format == RGB444_P) {
-		i_y_stride = AXI_WORD_ALIGN(i_width);
-		o_y_stride = AXI_WORD_ALIGN(o_width);
-		i_c_stride = AXI_WORD_ALIGN(i_width);
-		o_c_stride = AXI_WORD_ALIGN(o_width);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width) / 8);
+		i_c_stride = i_y_stride;
+		o_c_stride = o_y_stride;
 	} else if (format == YV12) {
-		i_c_stride = AXI_WORD_ALIGN(i_width / 2);
-		o_c_stride = AXI_WORD_ALIGN(o_width / 2);
+		i_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width / 2) / 8);
+		o_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width / 2) / 8);
 		i_y_stride = i_c_stride * 2;
 		o_y_stride = o_c_stride * 2;
 	} else if (format == Y_GREY) {
-		i_y_stride = AXI_WORD_ALIGN(i_width);
-		o_y_stride = AXI_WORD_ALIGN(o_width);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width) / 8);
 		i_c_stride = 0;
 		o_c_stride = 0;
 	} else {
-		E_GDC("Error unknow format\n");
+		E_GDC("Error unknow format 0x%x\n", format);
 		return ret;
 	}
 
@@ -225,10 +244,10 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 	gdc_gs->gdc_config.output_height = o_height;
 	gdc_gs->gdc_config.output_y_stride = o_y_stride;
 	gdc_gs->gdc_config.output_c_stride = o_c_stride;
-	gdc_gs->gdc_config.format = format;
+	gdc_gs->gdc_config.format = tparm->format;
 	gdc_gs->magic = sizeof(*gdc_gs);
 
-	buf.format = format;
+	buf.format = tparm->format;
 
 	ret = gdc_create_ctx(ctx);
 	if (ret < 0)
@@ -322,7 +341,7 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 		}
 	}
 
-	ret = gdc_alloc_buffer(ctx, OUTPUT_BUFF_TYPE, &buf, true);
+	ret = gdc_alloc_buffer(ctx, OUTPUT_BUFF_TYPE, &buf, false);
 	if (ret < 0) {
 		gdc_destroy_ctx(ctx);
 		E_GDC("Error alloc gdc input buff\n");
@@ -537,7 +556,7 @@ void *main_run(void *arg)
 	struct gdc_param g_param;
 	unsigned long stime;
 
-	ret = check_plane_number(plane_number, format);
+	ret = check_plane_number(plane_number, format & FORMAT_TYPE_MASK);
 	if (ret < 0) {
 		E_GDC("Error plane_number=[%d]\n", plane_number);
 		return NULL;
@@ -568,6 +587,7 @@ void *main_run(void *arg)
 
 		gdc_set_input_image(&ctx, input_file, len);
 
+		gdc_sync_for_device(&ctx);
 		stime = myclock();
 
 		for (j = 0; j < num; j++) {
@@ -598,6 +618,7 @@ void *main_run(void *arg)
 		}
 		printf("time=%ld ms\n", myclock() - stime);
 
+		gdc_sync_for_device(&ctx);
 		save_imgae(&ctx, output_file);
 		gdc_destroy_ctx(&ctx);
 	}
@@ -676,7 +697,7 @@ int main(int argc, char **argv)
 			D_GDC("custom_fw: %s\n", config_file);
 			break;
 		case 'f':
-			format = atol(optarg);
+			format = strtol(optarg, NULL, 0);
 			break;
 		case 'i':
 			input_file = optarg;

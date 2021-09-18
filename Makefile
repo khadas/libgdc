@@ -6,7 +6,11 @@ CFLAGS += -I ./include/gdc/
 LIBGDC = libgdc.so
 
 LIBDIR:= .
-LIBDEWARPDIR:= ./dewarp
+ifeq ($(AML_DEW_BIT), 64)
+LIBDEWARPDIR:= ./dewarp/lib/64
+else
+LIBDEWARPDIR:= ./dewarp/lib/32
+endif
 GDC_TEST_OBJ = gdc_test.o
 GDC_CHIP_CHECK_OBJ = gdc_chip_check.o
 DEWARP_TEST_OBJ = dewarp/dewarp_test.o
@@ -16,7 +20,7 @@ DEWARP_TEST = dewarp_test
 OBJS = $(GDC_TEST_OBJ) $(GDC_CHIP_CHECK_OBJ) $(DEWARP_TEST_OBJ) $(LIBGDC_OBJ)
 
 # rules
-all: $(LIBGDC) $(GDC_TEST) $(GDC_CHIP_CHECK) $(DEWARP_TEST)
+all: $(LIBGDC) $(GDC_TEST) $(GDC_CHIP_CHECK)
 
 $(GDC_TEST): $(LIBGDC)
 $(GDC_CHIP_CHECK): $(LIBGDC)

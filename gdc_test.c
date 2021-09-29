@@ -168,8 +168,10 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 	struct gdc_settings_ex *gdc_gs = NULL;
 	int ret = -1;
 	uint32_t format = 0;
-	uint32_t bit_width_flag = 0;
-	uint32_t bit_width = 8;
+	uint32_t in_bit_width_flag = 0;
+	uint32_t out_bit_width_flag = 0;
+	uint32_t in_bit_width = 8;
+	uint32_t out_bit_width = 8;
 	uint32_t i_width = 0;
 	uint32_t i_height = 0;
 	uint32_t o_width = 0;
@@ -196,37 +198,54 @@ static int gdc_init_cfg(struct gdc_usr_ctx_s *ctx, struct gdc_param *tparm,
 	o_height = tparm->o_height;
 
 	format = tparm->format & FORMAT_TYPE_MASK;
-	bit_width_flag = tparm->format & FORMAT_BITW_MASK;
+	in_bit_width_flag = tparm->format & FORMAT_IN_BITW_MASK;
+	out_bit_width_flag = tparm->format & FORMAT_OUT_BITW_MASK;
 
-	switch (bit_width_flag) {
-	case BITW_8:
-		bit_width = 8;
+	switch (in_bit_width_flag) {
+	case IN_BITW_8:
+		in_bit_width = 8;
 		break;
-	case BITW_10:
-		bit_width = 10;
+	case IN_BITW_10:
+		in_bit_width = 10;
 		break;
-	case BITW_12:
-		bit_width = 12;
+	case IN_BITW_12:
+		in_bit_width = 12;
 		break;
-	case BITW_16:
-		bit_width = 16;
+	case IN_BITW_16:
+		in_bit_width = 16;
 		break;
 	}
-	printf("bit width:%d\n", bit_width);
+
+	switch (out_bit_width_flag) {
+	case OUT_BITW_8:
+		out_bit_width = 8;
+		break;
+	case OUT_BITW_10:
+		out_bit_width = 10;
+		break;
+	case OUT_BITW_12:
+		out_bit_width = 12;
+		break;
+	case OUT_BITW_16:
+		out_bit_width = 16;
+		break;
+	}
+
+	printf("in bit width:%d in bit width:%d\n", in_bit_width, out_bit_width);
 
 	if (format == NV12 || format == YUV444_P || format == RGB444_P) {
-		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width) / 8);
-		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width) / 8);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width) / 8);
 		i_c_stride = i_y_stride;
 		o_c_stride = o_y_stride;
 	} else if (format == YV12) {
-		i_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width / 2) / 8);
-		o_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width / 2) / 8);
+		i_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width / 2) / 8);
+		o_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width / 2) / 8);
 		i_y_stride = i_c_stride * 2;
 		o_y_stride = o_c_stride * 2;
 	} else if (format == Y_GREY) {
-		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width) / 8);
-		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width) / 8);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width) / 8);
 		i_c_stride = 0;
 		o_c_stride = 0;
 	} else {

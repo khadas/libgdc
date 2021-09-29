@@ -22,10 +22,12 @@
 
 struct dewarp_params dewarp_params;
 static int process_circle = 1;
-static int bit_width;
+static int in_bit_width;
+static int out_bit_width;
 char in_file[256];
 char out_file[256];
 char dump_fw_file[256];
+char static_fw_file[256];
 
 char meshin_file[WIN_MAX][256];
 float *meshin_data_table[WIN_MAX];
@@ -51,7 +53,8 @@ static void print_usage(void)
 	printf ("  -input_offset <X_Y>                                                                                                                                     \n");
 	printf ("  -fov <Num>                                                                                                                                              \n");
 	printf ("  -color_mode <0:YUV420_PLANAR 1:YUV420_SEMIPLANAR 2:YONLY>                                                                                               \n");
-	printf ("  -bit_width  <0:8bit 1:10bit 2:12bit 3:16bit>                                                                                                            \n");
+	printf ("  -in_bit_width  <0:8bit 1:10bit 2:12bit 3:16bit>                                                                                                         \n");
+	printf ("  -out_bit_width <0:8bit 1:10bit 2:12bit 3:16bit>                                                                                                         \n");
 	printf ("  -output_size <WxH>                                                                                                                                      \n");
 	printf ("  -proj1 <ProjMode_Pan_Tilt_Rotation_Zoom_StrengthH_StrengthV>                                                                                            \n");
 	printf ("  -proj2 <ProjMode_Pan_Tilt_Rotation_Zoom_StrengthH_StrengthV>                                                                                            \n");
@@ -78,6 +81,7 @@ static void print_usage(void)
 	printf ("  -circle <Num>                                                                                                                                           \n");
 	printf ("  -in_file  <ImageName>                                                                                                                                   \n");
 	printf ("  -out_file <ImageName>                                                                                                                                   \n");
+	printf ("  -static_fw_file <FirmwareName>                                                                                                                          \n");
 	printf ("  -dump_fw_file <FirmwareName>                                                                                                                            \n");
 	printf ("\n");
 }
@@ -125,8 +129,12 @@ static int parse_command_line(int argc, char *argv[])
 				sscanf (argv[i], "%d", &dewarp_params.color_mode) == 1) {
 				param_cnt++;
 				continue;
-			} else if (strcmp (argv[i] + 1, "bit_width") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d", &bit_width) == 1) {
+			} else if (strcmp (argv[i] + 1, "in_bit_width") == 0 && ++i < argc &&
+				sscanf (argv[i], "%d", &in_bit_width) == 1) {
+				param_cnt++;
+				continue;
+			} else if (strcmp (argv[i] + 1, "out_bit_width") == 0 && ++i < argc &&
+				sscanf (argv[i], "%d", &out_bit_width) == 1) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "output_size") == 0 && ++i < argc &&
@@ -264,6 +272,10 @@ static int parse_command_line(int argc, char *argv[])
 				sscanf (argv[i], "%s", out_file) == 1) {
 				param_cnt++;
 				continue;
+			} else if (strcmp (argv[i] + 1, "static_fw_file") == 0 && ++i < argc &&
+				sscanf (argv[i], "%s", static_fw_file) == 1) {
+				param_cnt++;
+				continue;
 			} else if (strcmp (argv[i] + 1, "dump_fw_file") == 0 && ++i < argc &&
 				sscanf (argv[i], "%s", dump_fw_file) == 1) {
 				param_cnt++;
@@ -333,7 +345,9 @@ static int parse_command_line(int argc, char *argv[])
 			win[i].win_start_x, win[i].win_end_x, win[i].win_start_y, win[i].win_end_y,
 			win[i].img_start_x, win[i].img_end_x, win[i].img_start_y, win[i].img_end_y);
 	}
-	printf("       in_file:%s out_file:%s bit_width:%d\n", in_file, out_file, bit_width);
+	printf("       in_file:%s out_file:%s in_bit_width:%d out_bit_width:%d\n", in_file, out_file, in_bit_width, out_bit_width);
+	if (strlen(static_fw_file))
+		printf("       static_fw_file:%s\n", static_fw_file);
 	printf("########################################\n");
 	printf("\n");
 	printf("\n");
@@ -342,10 +356,12 @@ static int parse_command_line(int argc, char *argv[])
 }
 
 static int ion_alloc_mem(unsigned int ion_dev_fd, unsigned int alloc_bytes, int cache);
+static int get_file_size(char *file_name);
 static int aml_read_file(int shared_fd, const char* file_name, int read_bytes);
 static int aml_write_file(int shared_fd, const char* file_name, int write_bytes);
 static void ion_release_mem(int shared_fd);
-static int dewarp_to_libgdc_format(int dewarp_format, int bit_width);
+static int dewarp_to_libgdc_format(int dewarp_format, int in_bit_width,
+				   int out_bit_width);
 
 int main(int argc, char** argv)
 {
@@ -365,8 +381,10 @@ int main(int argc, char** argv)
 	int o_height = 0;
 	int format_all;
 	int format;
-	int bit_width_flag;
-	int bit_width_val;
+	int in_bit_width_flag = 0;
+	int out_bit_width_flag = 0;
+	int in_bit_width_val = 8;
+	int out_bit_width_val = 8;
 	int plane_number = 1;
 	struct gdc_settings_ex *gdc_gs = NULL;
 	int ret = -1;
@@ -419,7 +437,9 @@ int main(int argc, char** argv)
 	ctx.plane_number = plane_number;   /* data in one continuous mem block */
 	ctx.dev_type = AML_GDC;            /* dewarp */
 
-	format_all = dewarp_to_libgdc_format(dewarp_params.color_mode, bit_width);
+	format_all = dewarp_to_libgdc_format(dewarp_params.color_mode,
+					     in_bit_width,
+					     out_bit_width);
 
 	i_width  = in->width;
 	i_height = in->height;
@@ -427,36 +447,58 @@ int main(int argc, char** argv)
 	o_height = out->height;
 
 	format = format_all & FORMAT_TYPE_MASK;
-	bit_width_flag = format_all & FORMAT_BITW_MASK;
+	in_bit_width_flag = format_all & FORMAT_IN_BITW_MASK;
+	out_bit_width_flag = format_all & FORMAT_OUT_BITW_MASK;
 
-	switch (bit_width_flag) {
-	case BITW_8:
-		bit_width_val = 8;
+	switch (in_bit_width_flag) {
+	case IN_BITW_8:
+		in_bit_width_val = 8;
 		break;
-	case BITW_10:
-		bit_width_val = 10;
+	case IN_BITW_10:
+		in_bit_width_val = 10;
 		break;
-	case BITW_12:
-		bit_width_val = 12;
+	case IN_BITW_12:
+		in_bit_width_val = 12;
 		break;
-	case BITW_16:
-		bit_width_val = 16;
+	case IN_BITW_16:
+		in_bit_width_val = 16;
 		break;
+	default:
+		printf("%s, format (0x%x) in_bitw is wrong\n",
+			__func__, format);
+	}
+
+	switch (out_bit_width_flag) {
+	case OUT_BITW_8:
+		out_bit_width_val = 8;
+		break;
+	case OUT_BITW_10:
+		out_bit_width_val = 10;
+		break;
+	case OUT_BITW_12:
+		out_bit_width_val = 12;
+		break;
+	case OUT_BITW_16:
+		out_bit_width_val = 16;
+		break;
+	default:
+		printf("%s, format (0x%x) out_bitw is wrong\n",
+			__func__, format);
 	}
 
 	if (format == NV12) {
-		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width_val) / 8);
-		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width_val) / 8);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width_val) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width_val) / 8);
 		i_c_stride = i_y_stride;
 		o_c_stride = o_y_stride;
 	} else if (format == YV12) {
-		i_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width_val / 2) / 8);
-		o_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width_val / 2) / 8);
+		i_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width_val / 2) / 8);
+		o_c_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width_val / 2) / 8);
 		i_y_stride = i_c_stride * 2;
 		o_y_stride = o_c_stride * 2;
 	} else if (format == Y_GREY) {
-		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * bit_width_val) / 8);
-		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * bit_width_val) / 8);
+		i_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(i_width * in_bit_width_val) / 8);
+		o_y_stride = AXI_WORD_ALIGN(AXI_BYTE_ALIGN(o_width * out_bit_width_val) / 8);
 		i_c_stride = 0;
 		o_c_stride = 0;
 	} else {
@@ -532,12 +574,20 @@ int main(int argc, char** argv)
 		goto release_out_buf;
 	}
 
-	stime = myclock();
-	for (i = 0; i< process_circle; i++)
-		ret = dewarp_gen_config(&dewarp_params, fw_buffer);
+	/* use static or dynamic config */
+	if (strlen(static_fw_file)) {
+		fw_bytes = get_file_size(static_fw_file);
+		ret = aml_read_file(firmware_shared_fd, static_fw_file, fw_bytes);
+		if (ret < 0)
+			goto release_out_buf;
+	} else {
+		stime = myclock();
+		for (i = 0; i< process_circle; i++)
+			ret = dewarp_gen_config(&dewarp_params, fw_buffer);
 
-	printf("fw generation time=%ld ms, total FW bytes:%d\n", myclock() - stime, ret);
-	fw_bytes = ret;
+		printf("fw generation time=%ld ms, total FW bytes:%d\n", myclock() - stime, ret);
+		fw_bytes = ret;
+	}
 
 	stime = myclock();
 	for (i = 0; i< process_circle; i++) {
@@ -594,6 +644,33 @@ static int ion_alloc_mem(unsigned int ion_dev_fd, unsigned int alloc_bytes, int 
 	}
 
 	return ion_alloc_param.mImageFd;
+}
+
+static int get_file_size(char *file_name)
+{
+	int f_size = -1;
+	FILE *fp = NULL;
+
+	if (file_name == NULL) {
+		E_GDC("Error file name\n");
+		return f_size;
+	}
+
+	fp = fopen(file_name, "rb");
+	if (fp == NULL) {
+		E_GDC("Error open file %s\n", file_name);
+		return f_size;
+	}
+
+	fseek(fp, 0, SEEK_END);
+
+	f_size = ftell(fp);
+
+	fclose(fp);
+
+	D_GDC("%s: size %d\n", file_name, f_size);
+
+	return f_size;
 }
 
 static int aml_read_file(int shared_fd, const char* file_name, int read_bytes)
@@ -676,7 +753,8 @@ static void ion_release_mem(int shared_fd)
 	close(shared_fd);
 }
 
-static int dewarp_to_libgdc_format(int dewarp_format, int bit_width)
+static int dewarp_to_libgdc_format(int dewarp_format, int in_bit_width,
+				   int out_bit_width)
 {
 	int ret = 0;
 
@@ -695,24 +773,41 @@ static int dewarp_to_libgdc_format(int dewarp_format, int bit_width)
 		break;
 	}
 
-	switch (bit_width) {
+	switch (in_bit_width) {
 	case 0:
-		ret |= BITW_8;
+		ret |= IN_BITW_8;
 		break;
 	case 1:
-		ret |= BITW_10;
+		ret |= IN_BITW_10;
 		break;
 	case 2:
-		ret |= BITW_12;
+		ret |= IN_BITW_12;
 		break;
 	case 3:
-		ret |= BITW_16;
+		ret |= IN_BITW_16;
 		break;
 	default:
-		printf("bit_width(%d) is wrong\n", bit_width);
+		printf("int bit_width(%d) is wrong\n", in_bit_width);
 		break;
 	}
 
+	switch (out_bit_width) {
+	case 0:
+		ret |= OUT_BITW_8;
+		break;
+	case 1:
+		ret |= OUT_BITW_10;
+		break;
+	case 2:
+		ret |= OUT_BITW_12;
+		break;
+	case 3:
+		ret |= OUT_BITW_16;
+		break;
+	default:
+		printf("out bit_width(%d) is wrong\n", out_bit_width);
+		break;
+	}
 
 	return ret;
 }

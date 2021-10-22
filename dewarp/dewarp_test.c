@@ -73,6 +73,7 @@ static void print_usage(void)
 	printf ("  -meshin3_file <MeshinDataFileName>                                                                                                                      \n");
 	printf ("  -meshin4_file <MeshinDataFileName>                                                                                                                      \n");
 	printf ("  -dptz_param SrcU_SrcV_OutWW_OutHH_SrbUW_SrbVW_SrbWW_SrbHH_ScWW_ScHH_ZoomP_ZoomQ_PixelAspectRatioX_PixelAspectRatioY_Fx_Fy_UC_VC_K1_K2_K3_K4_K5_K6_P1_P2 \n");
+	printf ("  -proc_param IntrpMode_Replace0_Replace1_Replace2_Edge0_Edge1_Edge2                                                                                      \n");
 	printf ("  -win1 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
 	printf ("  -win2 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
 	printf ("  -win3 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
@@ -96,6 +97,7 @@ static int parse_command_line(int argc, char *argv[])
 	struct clb_param *clb       = &dewarp_params.clb_param[0];
 	struct meshin_param *meshin = &dewarp_params.meshin_param[0];
 	struct dptz_param * dptz_param = &dewarp_params.dptz_param;
+	struct proc_param *proc_param = &dewarp_params.proc_param;
 
 	dewarp_params.tile_x_step = 8; /* default x step */
 	dewarp_params.tile_y_step = 8; /* default y step */
@@ -228,6 +230,12 @@ static int parse_command_line(int argc, char *argv[])
 					&dptz_param->k5,&dptz_param->k6,&dptz_param->p1,&dptz_param->p2) == 26) {
 				param_cnt++;
 				continue;
+			} else if (strcmp (argv[i] + 1, "proc_param") == 0 && ++i < argc &&
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d",
+					&proc_param->intrp_mode, &proc_param->replace_0, &proc_param->replace_1, &proc_param->replace_2,
+					&proc_param->edge_0, &proc_param->edge_1, &proc_param->edge_2) == 7) {
+				param_cnt++;
+				continue;
 			} else if (strcmp (argv[i] + 1, "win1") == 0 && ++i < argc &&
 				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d", &win[0].win_start_x, &win[0].win_end_x, &win[0].win_start_y, &win[0].win_end_y,
 					&win[0].img_start_x, &win[0].img_end_x, &win[0].img_start_y, &win[0].img_end_y) == 8) {
@@ -348,6 +356,10 @@ static int parse_command_line(int argc, char *argv[])
 	printf("       in_file:%s out_file:%s in_bit_width:%d out_bit_width:%d\n", in_file, out_file, in_bit_width, out_bit_width);
 	if (strlen(static_fw_file))
 		printf("       static_fw_file:%s\n", static_fw_file);
+	printf("    proc_param:");
+	printf("intrp(%d) replace(%d,%d,%d) edge(%d,%d,%d)\n", proc_param->intrp_mode,
+		proc_param->replace_0, proc_param->replace_1, proc_param->replace_2,
+		proc_param->edge_0, proc_param->edge_1, proc_param->edge_2);
 	printf("########################################\n");
 	printf("\n");
 	printf("\n");

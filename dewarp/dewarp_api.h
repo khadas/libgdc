@@ -90,6 +90,16 @@ struct dptz_param {
     float k1,k2,k3,k4,k5,k6,p1,p2;          /* sensor GDC parameters; */
 };
 
+struct proc_param {
+    int intrp_mode;
+    int replace_0;
+    int replace_1;
+    int replace_2;
+    int edge_0;
+    int edge_1;
+    int edge_2;
+};
+
 struct dewarp_params {
     int win_num;
     struct input_param input_param;
@@ -103,6 +113,7 @@ struct dewarp_params {
     int prm_mode; /* 0. use proj_param, 1.use clb_param, 2. meshin mode 3. use dptz_param */
     int tile_x_step;
     int tile_y_step;
+    struct proc_param proc_param;
 };
 
 typedef enum _dw_proj_mode_ {

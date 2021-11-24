@@ -48,6 +48,8 @@ struct win_param {
     int img_end_x;
     int img_start_y;
     int img_end_y;
+    int mesh_x_len;
+    int mesh_y_len;
 };
 
 struct clb_param {

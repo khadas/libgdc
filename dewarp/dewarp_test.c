@@ -74,10 +74,10 @@ static void print_usage(void)
 	printf ("  -meshin4_file <MeshinDataFileName>                                                                                                                      \n");
 	printf ("  -dptz_param SrcU_SrcV_OutWW_OutHH_SrbUW_SrbVW_SrbWW_SrbHH_ScWW_ScHH_ZoomP_ZoomQ_PixelAspectRatioX_PixelAspectRatioY_Fx_Fy_UC_VC_K1_K2_K3_K4_K5_K6_P1_P2 \n");
 	printf ("  -proc_param IntrpMode_Replace0_Replace1_Replace2_Edge0_Edge1_Edge2                                                                                      \n");
-	printf ("  -win1 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
-	printf ("  -win2 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
-	printf ("  -win3 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
-	printf ("  -win4 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY>                                                                         \n");
+	printf ("  -win1 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY_MeshXLen_MeshYLen>                                                       \n");
+	printf ("  -win2 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY_MeshXLen_MeshYLen>                                                       \n");
+	printf ("  -win3 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY_MeshXLen_MeshYLen>                                                       \n");
+	printf ("  -win4 <WinStartX_WinEndX_WinStartY_WinEndY_ImgStartX_ImgEndX_ImgStartY_ImgEndY_MeshXLen_MeshYLen>                                                       \n");
 	printf ("  -prm_mode <0:use proj_param, 1:use clb_param 2:use meshin 3:use dptz_param>                                                                             \n");
 	printf ("  -circle <Num>                                                                                                                                           \n");
 	printf ("  -in_file  <ImageName>                                                                                                                                   \n");
@@ -231,29 +231,29 @@ static int parse_command_line(int argc, char *argv[])
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "proc_param") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d",
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d_%d",
 					&proc_param->intrp_mode, &proc_param->replace_0, &proc_param->replace_1, &proc_param->replace_2,
 					&proc_param->edge_0, &proc_param->edge_1, &proc_param->edge_2) == 7) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "win1") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d", &win[0].win_start_x, &win[0].win_end_x, &win[0].win_start_y, &win[0].win_end_y,
-					&win[0].img_start_x, &win[0].img_end_x, &win[0].img_start_y, &win[0].img_end_y) == 8) {
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d_%d_%d", &win[0].win_start_x, &win[0].win_end_x, &win[0].win_start_y, &win[0].win_end_y,
+					&win[0].img_start_x, &win[0].img_end_x, &win[0].img_start_y, &win[0].img_end_y, &win[0].mesh_x_len, &win[0].mesh_y_len) == 10) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "win2") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d", &win[1].win_start_x, &win[1].win_end_x, &win[1].win_start_y, &win[1].win_end_y,
-					&win[1].img_start_x, &win[1].img_end_x, &win[1].img_start_y, &win[1].img_end_y) == 8) {
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d_%d_%d", &win[1].win_start_x, &win[1].win_end_x, &win[1].win_start_y, &win[1].win_end_y,
+					&win[1].img_start_x, &win[1].img_end_x, &win[1].img_start_y, &win[1].img_end_y, &win[1].mesh_x_len, &win[1].mesh_y_len) == 10) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "win3") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d", &win[2].win_start_x, &win[2].win_end_x, &win[2].win_start_y, &win[2].win_end_y,
-					&win[2].img_start_x, &win[2].img_end_x, &win[2].img_start_y, &win[2].img_end_y) == 8) {
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d_%d_%d", &win[2].win_start_x, &win[2].win_end_x, &win[2].win_start_y, &win[2].win_end_y,
+					&win[2].img_start_x, &win[2].img_end_x, &win[2].img_start_y, &win[2].img_end_y, &win[2].mesh_x_len, &win[2].mesh_y_len) == 10) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "win4") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d", &win[3].win_start_x, &win[3].win_end_x, &win[3].win_start_y, &win[3].win_end_y,
-					&win[3].img_start_x, &win[3].img_end_x, &win[3].img_start_y, &win[3].img_end_y) == 8) {
+				sscanf (argv[i], "%d_%d_%d_%d_%d_%d_%d_%d_%d_%d", &win[3].win_start_x, &win[3].win_end_x, &win[3].win_start_y, &win[3].win_end_y,
+					&win[3].img_start_x, &win[3].img_end_x, &win[3].img_start_y, &win[3].img_end_y, &win[3].mesh_x_len, &win[3].mesh_y_len) == 10) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "prm_mode") == 0 && ++i < argc &&

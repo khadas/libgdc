@@ -257,6 +257,77 @@ static int set_buf_fd(gdc_alloc_buffer_t *buf, gdc_buffer_info_t *buf_info,
 	return ret;
 }
 
+/* gdc: allocate a block of memory */
+int gdc_alloc_mem(struct gdc_usr_ctx_s *ctx, uint32_t len, uint32_t type)
+{
+	int dir = 0, index = -1, buf_fd = -1;
+	struct gdc_dmabuf_req_s buf_cfg;
+
+	memset(&buf_cfg, 0, sizeof(buf_cfg));
+	if (type == OUTPUT_BUFF_TYPE)
+		dir = DMA_FROM_DEVICE;
+	else
+		dir = DMA_TO_DEVICE;
+
+	buf_cfg.len = len;
+	buf_cfg.dma_dir = dir;
+
+	index = _gdc_alloc_dma_buffer(ctx->gdc_client, dir,
+					buf_cfg.len);
+	if (index < 0)
+		return -1;
+
+	/* get dma fd*/
+	buf_fd = _gdc_get_dma_buffer_fd(ctx->gdc_client,
+						index);
+	if (buf_fd < 0) {
+		E_GDC("%s: alloc failed\n", __func__);
+		return -1;
+	}
+	D_GDC("%s: dma_fd=%d\n", buf_fd, __func__);
+	/* after alloc, dmabuffer free can be called, it just dec refcount */
+	_gdc_free_dma_buffer(ctx->gdc_client, index);
+
+	return buf_fd;
+}
+
+/* gdc: free a block of memory */
+void gdc_release_mem(int shared_fd)
+{
+	if (shared_fd > 0)
+		close(shared_fd);
+}
+
+/* gdc: sync cache for a block of memory */
+void gdc_sync_for_device_mem(struct gdc_usr_ctx_s *ctx, int shared_fd)
+{
+	int ret = -1;
+
+	if (shared_fd > 0) {
+		ret = ioctl(ctx->gdc_client, GDC_SYNC_DEVICE, &shared_fd);
+		if (ret < 0) {
+			E_GDC("%s ioctl failed\n", __func__);
+			return;
+		}
+	}
+}
+
+/* gdc: invalid cache for a block of memory */
+void gdc_sync_for_cpu_mem(struct gdc_usr_ctx_s *ctx, int shared_fd)
+{
+	int ret = -1;
+
+	if (shared_fd > 0) {
+		ret = ioctl(ctx->gdc_client, GDC_SYNC_CPU, &shared_fd);
+		if (ret < 0) {
+			E_GDC("%s ioctl failed\n", __func__);
+			return;
+		}
+	}
+}
+
+
+/* gdc or ion: alloc memory */
 int gdc_alloc_buffer (struct gdc_usr_ctx_s *ctx, uint32_t type,
 			struct gdc_alloc_buffer_s *buf, bool cache_flag)
 {
@@ -389,6 +460,7 @@ int gdc_process_with_builtin_fw(struct gdc_usr_ctx_s *ctx)
 	return 0;
 }
 
+/* gdc or ion: sync cache */
 int gdc_sync_for_device(struct gdc_usr_ctx_s *ctx)
 {
 	int ret = -1, i;
@@ -427,6 +499,7 @@ int gdc_sync_for_device(struct gdc_usr_ctx_s *ctx)
 	return 0;
 }
 
+/* gdc or ion: invalid cache */
 int gdc_sync_for_cpu(struct gdc_usr_ctx_s *ctx)
 {
 	int ret = -1, i;

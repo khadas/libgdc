@@ -363,9 +363,22 @@ int gdc_process(struct gdc_usr_ctx_s *ctx);
 
 int gdc_process_with_builtin_fw(struct gdc_usr_ctx_s *ctx);
 
+/* gdc or ion: alloc memory, which will be releasd in gdc_destroy_ctx() */
 int gdc_alloc_buffer (struct gdc_usr_ctx_s *ctx, uint32_t type,
 			struct gdc_alloc_buffer_s *buf, bool cache_flag);
-
+/* gdc or ion: sync cache */
 int gdc_sync_for_device(struct gdc_usr_ctx_s *ctx);
+/* gdc or ion: invalid cache */
 int gdc_sync_for_cpu(struct gdc_usr_ctx_s *ctx);
+
+/** gdc: allocate a block of memory */
+int gdc_alloc_mem(struct gdc_usr_ctx_s *ctx, uint32_t len, uint32_t type);
+/** gdc: free a block of memory */
+void gdc_release_mem(int shared_fd);
+/** gdc: sync cache for a block of memory */
+void gdc_sync_for_device_mem(struct gdc_usr_ctx_s *ctx, int shared_fd);
+/** gdc: invalid cache for a block of memory */
+void gdc_sync_for_cpu_mem(struct gdc_usr_ctx_s *ctx, int shared_fd);
+
+
 #endif

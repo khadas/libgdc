@@ -3,6 +3,7 @@
 #
 LIBGDC_OBJ = gdc.o
 CFLAGS += -I ./include/gdc/
+CFLAGS += -I ./include/kernel-headers/
 LIBGDC = libgdc.so
 
 LIBDIR:= .

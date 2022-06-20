@@ -14,10 +14,14 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
+#include <errno.h>
 #include <sys/time.h>
 #include <gdc_api.h>
 #include <IONmem.h>
+#include <uapi/linux/dma-buf.h>
+#include <uapi/linux/dma-heap.h>
 #include "dewarp_api.h"
 
 struct dewarp_params dewarp_params;
@@ -32,6 +36,10 @@ char static_fw_file[256];
 
 char meshin_file[WIN_MAX][256];
 float *meshin_data_table[WIN_MAX];
+
+#define DEVPATH "/dev/dma_heap"
+/* system heap for test */
+#define GENERIC_HEAP "system"
 
 static inline unsigned long myclock()
 {
@@ -84,7 +92,7 @@ static void print_usage(void)
 	printf ("  -in_file  <ImageName>                                                                                                                                   \n");
 	printf ("  -out_file <ImageName>                                                                                                                                   \n");
 	printf ("  -static_fw_file <FirmwareName>                                                                                                                          \n");
-	printf ("  -mem_type <0:ion 1:gdc_dmabuf>                                                                                                                          \n");
+	printf ("  -mem_type <0:ion 1:gdc_dmabuf 2:generic dma buf, /dev/dma_heap/xxx>                                                                                     \n");
 	printf ("  -dump_fw_file <FirmwareName>                                                                                                                            \n");
 	printf ("\n");
 }
@@ -381,6 +389,14 @@ static int aml_write_file(int shared_fd, const char* file_name, int write_bytes)
 static void ion_release_mem(int shared_fd);
 static int dewarp_to_libgdc_format(int dewarp_format, int in_bit_width,
 				   int out_bit_width);
+static int dmabuf_heap_open(char *name);
+static int dmabuf_heap_alloc_fdflags(int fd, size_t len, unsigned int fd_flags,
+				     unsigned int heap_flags, int *dmabuf_fd);
+static int dmabuf_heap_alloc(int fd, size_t len, unsigned int flags,
+			     int *dmabuf_fd);
+static void dmabuf_sync(int fd, int start_stop);
+static int dmabuf_heap_release(int dmabuf_fd);
+static int dmabuf_heap_close(int heap_fd);
 
 int main(int argc, char** argv)
 {
@@ -415,6 +431,7 @@ int main(int argc, char** argv)
 	int fw_len = 300 * 1024;           /* 300KB, just for test */
 	int fw_bytes = 0;
 	int *fw_buffer = NULL;
+	int heap_fd = -1, dmabuf_fd = -1;
 
 	ret = parse_command_line(argc, argv);
 	if (ret < 0)
@@ -543,6 +560,13 @@ int main(int argc, char** argv)
 	if (ret < 0)
 		goto release_meshin_buf;
 
+	if (mem_type == AML_GENERIC_DMABUF) {
+		/* system heap for test */
+		heap_fd = dmabuf_heap_open(GENERIC_HEAP);
+		if (heap_fd < 0)
+			goto destroy_ctx;
+	}
+
 	if (format == NV12 || format == YV12)
 		i_len = i_y_stride * i_height * 3 / 2;
 	else if (format == Y_GREY)
@@ -556,29 +580,47 @@ int main(int argc, char** argv)
 	/* firmware buffer */
 	if (mem_type == AML_GDC_MEM_ION)
 		ret = ion_alloc_mem(ctx.ion_fd, fw_len /*bytes*/, 0);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		ret = dmabuf_heap_alloc(heap_fd, fw_len /*bytes*/, 0, &dmabuf_fd);
 	else
 		ret = gdc_alloc_mem(&ctx, fw_len /*bytes*/, CONFIG_BUFF_TYPE);
 	if (ret < 0)
-		goto destroy_ctx;
-	firmware_shared_fd = ret;
+		goto close_generic_heap;
+
+	if (mem_type == AML_GENERIC_DMABUF)
+		firmware_shared_fd = dmabuf_fd;
+	else
+		firmware_shared_fd = ret;
 
 	/* input image buffer */
 	if (mem_type == AML_GDC_MEM_ION)
 		ret = ion_alloc_mem(ctx.ion_fd, i_len /*bytes*/, 0);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		ret = dmabuf_heap_alloc(heap_fd, i_len /*bytes*/, 0, &dmabuf_fd);
 	else
 		ret = gdc_alloc_mem(&ctx, i_len /*bytes*/, INPUT_BUFF_TYPE);
 	if (ret < 0)
 		goto release_fw_buf;
-	in_shared_fd = ret;
+
+	if (mem_type == AML_GENERIC_DMABUF)
+		in_shared_fd = dmabuf_fd;
+	else
+		in_shared_fd = ret;
 
 	/* output image buffer */
 	if (mem_type == AML_GDC_MEM_ION)
 		ret = ion_alloc_mem(ctx.ion_fd, o_len /*bytes*/, 0);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		ret = dmabuf_heap_alloc(heap_fd, o_len /*bytes*/, 0, &dmabuf_fd);
 	else
 		ret = gdc_alloc_mem(&ctx, o_len /*bytes*/, OUTPUT_BUFF_TYPE);
 	if (ret < 0)
 		goto release_in_buf;
-	out_shared_fd = ret;
+
+	if (mem_type == AML_GENERIC_DMABUF)
+		out_shared_fd = dmabuf_fd;
+	else
+		out_shared_fd = ret;
 
 	gdc_gs->config_buffer.plane_number = plane_number;
 	gdc_gs->config_buffer.mem_alloc_type = ctx.mem_type;
@@ -603,6 +645,8 @@ int main(int argc, char** argv)
 		goto release_out_buf;
 	}
 
+	if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_sync(firmware_shared_fd, DMA_BUF_SYNC_START);
 	/* use static or dynamic config */
 	if (strlen(static_fw_file)) {
 		fw_bytes = get_file_size(static_fw_file);
@@ -617,6 +661,9 @@ int main(int argc, char** argv)
 		printf("fw generation time=%ld ms, total FW bytes:%d\n", myclock() - stime, ret);
 		fw_bytes = ret;
 	}
+
+	if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_sync(firmware_shared_fd, DMA_BUF_SYNC_END);
 
 	if (mem_type == AML_GDC_MEM_DMABUF) {
 		gdc_sync_for_device_mem(&ctx, firmware_shared_fd);
@@ -651,18 +698,27 @@ int main(int argc, char** argv)
 release_out_buf:
 	if (mem_type == AML_GDC_MEM_ION)
 		ion_release_mem(out_shared_fd);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_heap_release(out_shared_fd);
 	else
 		gdc_release_mem(out_shared_fd);
 release_in_buf:
 	if (mem_type == AML_GDC_MEM_ION)
 		ion_release_mem(in_shared_fd);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_heap_release(in_shared_fd);
 	else
 		gdc_release_mem(in_shared_fd);
 release_fw_buf:
 	if (mem_type == AML_GDC_MEM_ION)
 		ion_release_mem(firmware_shared_fd);
+	else if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_heap_release(firmware_shared_fd);
 	else
 		gdc_release_mem(firmware_shared_fd);
+close_generic_heap:
+	if (mem_type == AML_GENERIC_DMABUF)
+		dmabuf_heap_close(heap_fd);
 destroy_ctx:
 	gdc_destroy_ctx(&ctx);
 release_meshin_buf:
@@ -672,6 +728,75 @@ release_meshin_buf:
 	}
 
 	return ret;
+}
+
+static int dmabuf_heap_open(char *name)
+{
+	int ret, fd;
+	char buf[256];
+
+	ret = snprintf(buf, 256, "%s/%s", DEVPATH, name);
+	if (ret < 0) {
+		printf("snprintf failed!\n");
+		return ret;
+	}
+
+	fd = open(buf, O_RDWR);
+	if (fd < 0)
+		printf("open %s failed!\n", buf);
+	return fd;
+}
+
+static int dmabuf_heap_alloc_fdflags(int fd, size_t len, unsigned int fd_flags,
+				     unsigned int heap_flags, int *dmabuf_fd)
+{
+	struct dma_heap_allocation_data data = {
+		.len = len,
+		.fd = 0,
+		.fd_flags = fd_flags,
+		.heap_flags = heap_flags,
+	};
+	int ret;
+
+	if (!dmabuf_fd)
+		return -EINVAL;
+
+	ret = ioctl(fd, DMA_HEAP_IOCTL_ALLOC, &data);
+	if (ret < 0)
+		return ret;
+	*dmabuf_fd = (int)data.fd;
+	return ret;
+}
+
+static int dmabuf_heap_alloc(int fd, size_t len, unsigned int flags,
+			     int *dmabuf_fd)
+{
+	return dmabuf_heap_alloc_fdflags(fd, len, O_RDWR | O_CLOEXEC, flags,
+					 dmabuf_fd);
+}
+
+static void dmabuf_sync(int fd, int start_stop)
+{
+	struct dma_buf_sync sync = {
+		.flags = start_stop | DMA_BUF_SYNC_RW,
+	};
+	int ret;
+
+	ret = ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
+	if (ret)
+		printf("sync failed %d\n", errno);
+}
+
+static int dmabuf_heap_release(int dmabuf_fd)
+{
+	if (dmabuf_fd >= 0)
+		close(dmabuf_fd);
+}
+
+static int dmabuf_heap_close(int heap_fd)
+{
+	if (heap_fd >= 0)
+		close(heap_fd);
 }
 
 static int ion_alloc_mem(unsigned int ion_dev_fd, unsigned int alloc_bytes, int cache)
@@ -732,7 +857,7 @@ static int aml_read_file(int shared_fd, const char* file_name, int read_bytes)
 	}
 	vaddr = (char*)mmap(NULL, read_bytes,
 			PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
-	if (!vaddr) {
+	if (vaddr == MAP_FAILED) {
 		printf("%s,%d,mmap failed,Not enough memory\n",__func__, __LINE__);
 		return -1;
 	}
@@ -769,7 +894,7 @@ static int aml_write_file(int shared_fd, const char* file_name, int write_bytes)
 
 	vaddr = (char*)mmap(NULL, write_bytes,
 			PROT_READ | PROT_WRITE, MAP_SHARED, shared_fd, 0);
-	if (!vaddr) {
+	if (vaddr == MAP_FAILED) {
 		printf("%s,%d,mmap failed,Not enough memory\n",__func__, __LINE__);
 		return -1;
 	}
@@ -797,7 +922,8 @@ static int aml_write_file(int shared_fd, const char* file_name, int write_bytes)
 
 static void ion_release_mem(int shared_fd)
 {
-	close(shared_fd);
+	if (shared_fd >= 0)
+		close(shared_fd);
 }
 
 static int dewarp_to_libgdc_format(int dewarp_format, int in_bit_width,

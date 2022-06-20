@@ -43,6 +43,7 @@ typedef unsigned long phys_addr_t;
 enum gdc_memtype_s {
 	AML_GDC_MEM_ION,
 	AML_GDC_MEM_DMABUF,
+	AML_GENERIC_DMABUF,
 	AML_GDC_MEM_INVALID,
 };
 

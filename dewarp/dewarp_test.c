@@ -37,10 +37,6 @@ char static_fw_file[256];
 char meshin_file[WIN_MAX][256];
 float *meshin_data_table[WIN_MAX];
 
-#define DEVPATH "/dev/dma_heap"
-/* system heap for test */
-#define GENERIC_HEAP "system"
-
 static inline unsigned long myclock()
 {
 	struct timeval tv;
@@ -389,14 +385,6 @@ static int aml_write_file(int shared_fd, const char* file_name, int write_bytes)
 static void ion_release_mem(int shared_fd);
 static int dewarp_to_libgdc_format(int dewarp_format, int in_bit_width,
 				   int out_bit_width);
-static int dmabuf_heap_open(char *name);
-static int dmabuf_heap_alloc_fdflags(int fd, size_t len, unsigned int fd_flags,
-				     unsigned int heap_flags, int *dmabuf_fd);
-static int dmabuf_heap_alloc(int fd, size_t len, unsigned int flags,
-			     int *dmabuf_fd);
-static void dmabuf_sync(int fd, int start_stop);
-static int dmabuf_heap_release(int dmabuf_fd);
-static int dmabuf_heap_close(int heap_fd);
 
 int main(int argc, char** argv)
 {
@@ -728,75 +716,6 @@ release_meshin_buf:
 	}
 
 	return ret;
-}
-
-static int dmabuf_heap_open(char *name)
-{
-	int ret, fd;
-	char buf[256];
-
-	ret = snprintf(buf, 256, "%s/%s", DEVPATH, name);
-	if (ret < 0) {
-		printf("snprintf failed!\n");
-		return ret;
-	}
-
-	fd = open(buf, O_RDWR);
-	if (fd < 0)
-		printf("open %s failed!\n", buf);
-	return fd;
-}
-
-static int dmabuf_heap_alloc_fdflags(int fd, size_t len, unsigned int fd_flags,
-				     unsigned int heap_flags, int *dmabuf_fd)
-{
-	struct dma_heap_allocation_data data = {
-		.len = len,
-		.fd = 0,
-		.fd_flags = fd_flags,
-		.heap_flags = heap_flags,
-	};
-	int ret;
-
-	if (!dmabuf_fd)
-		return -EINVAL;
-
-	ret = ioctl(fd, DMA_HEAP_IOCTL_ALLOC, &data);
-	if (ret < 0)
-		return ret;
-	*dmabuf_fd = (int)data.fd;
-	return ret;
-}
-
-static int dmabuf_heap_alloc(int fd, size_t len, unsigned int flags,
-			     int *dmabuf_fd)
-{
-	return dmabuf_heap_alloc_fdflags(fd, len, O_RDWR | O_CLOEXEC, flags,
-					 dmabuf_fd);
-}
-
-static void dmabuf_sync(int fd, int start_stop)
-{
-	struct dma_buf_sync sync = {
-		.flags = start_stop | DMA_BUF_SYNC_RW,
-	};
-	int ret;
-
-	ret = ioctl(fd, DMA_BUF_IOCTL_SYNC, &sync);
-	if (ret)
-		printf("sync failed %d\n", errno);
-}
-
-static int dmabuf_heap_release(int dmabuf_fd)
-{
-	if (dmabuf_fd >= 0)
-		close(dmabuf_fd);
-}
-
-static int dmabuf_heap_close(int heap_fd)
-{
-	if (heap_fd >= 0)
-		close(heap_fd);
 }
 
 static int ion_alloc_mem(unsigned int ion_dev_fd, unsigned int alloc_bytes, int cache)

@@ -22,6 +22,9 @@
 
 #include <linux/types.h>
 
+#define DEVPATH "/dev/dma_heap"
+#define GENERIC_HEAP "heap-codecmm"
+
 /* begin/end dma-buf functions used for userspace mmap. */
 struct dma_buf_sync {
 	__u64 flags;
@@ -81,5 +84,12 @@ struct dma_buf_export_sync_file {
 #define DMA_BUF_SET_NAME_A	_IOW(DMA_BUF_BASE, 1, u32)
 #define DMA_BUF_SET_NAME_B	_IOW(DMA_BUF_BASE, 1, u64)
 #define DMA_BUF_IOCTL_EXPORT_SYNC_FILE	_IOWR(DMA_BUF_BASE, 2, struct dma_buf_export_sync_file)
+
+int dmabuf_heap_open(char *name);
+int dmabuf_heap_alloc(int fd, size_t len, unsigned int flags,
+	     int *dmabuf_fd);
+void dmabuf_sync(int fd, int start_stop);
+void dmabuf_heap_release(int dmabuf_fd);
+void dmabuf_heap_close(int heap_fd);
 
 #endif

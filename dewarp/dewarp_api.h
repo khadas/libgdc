@@ -37,6 +37,7 @@ struct proj_param {
     float zoom;
     float strength_hor;
     float strength_ver;
+    int mirror;
 };
 
 struct win_param {

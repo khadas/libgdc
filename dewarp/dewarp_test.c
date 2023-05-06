@@ -150,23 +150,23 @@ static int parse_command_line(int argc, char *argv[])
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "proj1") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f", &proj[0].projection_mode, &proj[0].pan, &proj[0].tilt,
-					&proj[0].rotation, &proj[0].zoom, &proj[0].strength_hor, &proj[0].strength_ver) == 7) {
+				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f_%d", &proj[0].projection_mode, &proj[0].pan, &proj[0].tilt,
+					&proj[0].rotation, &proj[0].zoom, &proj[0].strength_hor, &proj[0].strength_ver, &proj[0].mirror) >= 7) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "proj2") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f", &proj[1].projection_mode, &proj[1].pan, &proj[1].tilt,
-					&proj[1].rotation, &proj[1].zoom, &proj[1].strength_hor, &proj[1].strength_ver) == 7) {
+				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f_%d", &proj[1].projection_mode, &proj[1].pan, &proj[1].tilt,
+					&proj[1].rotation, &proj[1].zoom, &proj[1].strength_hor, &proj[1].strength_ver, &proj[1].mirror) >= 7) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "proj3") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f", &proj[2].projection_mode, &proj[2].pan, &proj[2].tilt,
-					&proj[2].rotation, &proj[2].zoom, &proj[2].strength_hor, &proj[2].strength_ver) == 7) {
+				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f_%d", &proj[2].projection_mode, &proj[2].pan, &proj[2].tilt,
+					&proj[2].rotation, &proj[2].zoom, &proj[2].strength_hor, &proj[2].strength_ver, &proj[2].mirror) >= 7) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "proj4") == 0 && ++i < argc &&
-				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f", &proj[3].projection_mode, &proj[3].pan, &proj[3].tilt,
-					&proj[3].rotation, &proj[3].zoom, &proj[3].strength_hor, &proj[3].strength_ver) == 7) {
+				sscanf (argv[i], "%d_%d_%d_%d_%f_%f_%f_%d", &proj[3].projection_mode, &proj[3].pan, &proj[3].tilt,
+					&proj[3].rotation, &proj[3].zoom, &proj[3].strength_hor, &proj[3].strength_ver, &proj[3].mirror) >= 7) {
 				param_cnt++;
 				continue;
 			} else if (strcmp (argv[i] + 1, "clb1") == 0 && ++i < argc &&
@@ -317,9 +317,9 @@ static int parse_command_line(int argc, char *argv[])
 	for (i = 0; i < dewarp_params.win_num; i++) {
 		if (i != 0)
 			printf("              :");
-		printf("projection_mode(%5d) pan(%5d) tilt(%5d) rotation(%5d) zoom(%5f) strength_hor(%5f) strength_ver(%5f)\n",
+		printf("projection_mode(%5d) pan(%5d) tilt(%5d) rotation(%5d) zoom(%5f) strength_hor(%5f) strength_ver(%5f) mirror(%5d)\n",
 			proj[i].projection_mode, proj[i].pan, proj[i].tilt,
-			proj[i].rotation, proj[i].zoom, proj[i].strength_hor, proj[i].strength_ver);
+			proj[i].rotation, proj[i].zoom, proj[i].strength_hor, proj[i].strength_ver, proj[i].mirror);
 	}
 
 	printf("     clb_param:");
